@@ -1,8 +1,12 @@
 import numpy as np
 import itertools
-import matplotlib.pyplot as plt
 
-from PIL import Image as PImage
+
+try:
+    from PIL import Image as PImage
+except ImportError:
+    raise ImportError("Please install PIL to use this module.")
+
 
 """Colors that can be used to display segmentation masks"""
 COLORS = [
@@ -43,9 +47,9 @@ class Image(PImage.Image):
         self.__dict__.update(image.__dict__)
 
 
-    def fromarray(obj, channel=2, mode=None):
-        if channel < 2:
-            obj = np.moveaxis(np.array(obj), channel, 2)
+    def fromarray(obj, channel_pos=2, mode=None):
+        if channel_pos < 2:
+            obj = np.moveaxis(np.array(obj), channel_pos, 2)
 
         try:
             return Image(PImage.fromarray(obj, mode))
@@ -80,5 +84,10 @@ class Image(PImage.Image):
 
 
     def show(self):
-        plt.imshow(np.array(self))
-        plt.show()
+        """Matplotlib is much more nicer to display images."""
+        try:
+            import matplotlib.pyplot as plt
+            plt.imshow(np.array(self))
+            plt.show()
+        except ImportError:
+            super().show()
