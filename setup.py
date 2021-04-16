@@ -15,4 +15,5 @@ setup(
     ],
     license='MIT',
     zip_safe=False,
+    test_suite = 'tests',
 )

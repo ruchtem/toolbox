@@ -2,18 +2,94 @@ import sys
 import os
 import logging
 import time
+import functools
+import atexit
 from collections import Counter
-
-
-
-
-
-
+from termcolor import colored
 
 """
-Code below is taken from the great work of detectron2 (https://github.com/facebookresearch/detectron2)
-who adaped it from https://github.com/abseil/abseil-py/blob/master/absl/logging/__init__.py
+Code below is adapted from the great work of detectron2.
+
+https://github.com/facebookresearch/detectron2/blob/master/detectron2/utils/logger.py
 """
+
+class _ColorfulFormatter(logging.Formatter):
+    
+
+    def formatMessage(self, record):
+        log = super(_ColorfulFormatter, self).formatMessage(record)
+        if record.levelno == logging.WARNING:
+            prefix = colored("WARNING", "red", attrs=["blink"])
+        elif record.levelno == logging.ERROR or record.levelno == logging.CRITICAL:
+            prefix = colored("ERROR", "red", attrs=["blink", "underline"])
+        else:
+            return log
+        return prefix + " " + log
+
+
+@functools.lru_cache()  # so that calling setup_logger multiple times won't add many handlers
+def setup_logger(
+    output=None, distributed_rank=0, *, color=True, name="rtb"
+):
+    """
+    Initialize a logger and set its verbosity level to "DEBUG".
+    Args:
+        output (str): a file name or a directory to save log. If None, will not save log file.
+            If ends with ".txt" or ".log", assumed to be a file name.
+            Otherwise, logs will be saved to `output/log.txt`.
+        name (str): the root module name of this logger
+    Returns:
+        logging.Logger: a logger
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+
+    plain_formatter = logging.Formatter(
+        "[%(asctime)s] %(name)s %(levelname)s: %(message)s", datefmt="%m/%d %H:%M:%S"
+    )
+    # stdout logging: master only
+    if distributed_rank == 0:
+        ch = logging.StreamHandler(stream=sys.stdout)
+        ch.setLevel(logging.DEBUG)
+        if color:
+            formatter = _ColorfulFormatter(
+                colored("[%(asctime)s %(name)s]: ", "green") + "%(message)s",
+                datefmt="%m/%d %H:%M:%S",
+            )
+        else:
+            formatter = plain_formatter
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+
+    # file logging: all workers
+    if output is not None:
+        if output.endswith(".txt") or output.endswith(".log"):
+            filename = output
+        else:
+            filename = os.path.join(output, "log.txt")
+        if distributed_rank > 0:
+            filename = filename + ".rank{}".format(distributed_rank)
+        os.mkdirs(os.path.dirname(filename))
+
+        fh = logging.StreamHandler(_cached_log_stream(filename))
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(plain_formatter)
+        logger.addHandler(fh)
+
+    return logger
+
+
+# cache the opened file object, so that different calls to `setup_logger`
+# with the same file name can safely write to the same file.
+@functools.lru_cache(maxsize=None)
+def _cached_log_stream(filename):
+    io = open(filename, "a")
+    atexit.register(io.close)
+    return io
+
+
+
 
 def _find_caller():
     """

@@ -19,6 +19,7 @@ class DebugDataset(torch.utils.data.Dataset):
                 Reported dataset size: size * replication. Default: 1.
         """
         super().__init__()
+        self.original_dataset = dataset
         self.replication = replication
         self.size = size
         self.data = []
@@ -41,3 +42,7 @@ class DebugDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return self.data[index % self.size]
+    
+
+    def __repr__(self):
+        return f"Debug subset (n={self.size}) of {self.original_dataset}."
